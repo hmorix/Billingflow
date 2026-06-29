@@ -166,7 +166,7 @@ export const Billing: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
         
         {/* Free Plan */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyBlock: 'space-between', border: currentPlan === 'free' ? '2px solid var(--border-focus)' : '1px solid var(--border-color)', opacity: currentPlan === 'free' ? 1 : 0.7 }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', textAlign: "center", border: currentPlan === 'free' ? '2px solid var(--border-focus)' : '1px solid var(--border-color)', opacity: currentPlan === 'free' ? 1 : 0.7 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1 }}>
             <div>
               <h4 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Starter Free</h4>

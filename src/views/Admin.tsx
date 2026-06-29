@@ -571,7 +571,7 @@ export const Admin: React.FC = () => {
                         <td>{inv.organization_name}</td>
                         <td>{inv.client_name}</td>
                         <td>{new Date(inv.issue_date).toLocaleDateString()}</td>
-                        <td><strong>{inv.currency} {inv.totalAmount.toFixed(2)}</strong></td>
+                        <td><strong>$ {inv.totalAmount.toFixed(2)}</strong></td>
                         <td>
                           {isEditing ? (
                             <select
