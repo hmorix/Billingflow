@@ -10,6 +10,7 @@ import { InvoiceEdit } from './views/InvoiceEdit';
 import { Billing, CheckoutMock, PortalMock } from './views/Billing';
 import { Settings } from './views/Settings';
 import { BillDesign } from './views/BillDesign';
+import { TemplateBuilder } from './views/TemplateBuilder';
 import { Admin } from './views/Admin';
 
 export const App: React.FC = () => {
@@ -61,6 +62,8 @@ export const App: React.FC = () => {
         {/* Full-screen mock stripe screens (Bypass sidebar structure) */}
         <Route path="/billing/checkout-mock" element={<CheckoutMock />} />
         <Route path="/billing/portal-mock" element={<PortalMock />} />
+        <Route path="/settings/design/builder" element={<TemplateBuilder />} />
+        <Route path="/settings/design/builder/:id" element={<TemplateBuilder />} />
 
         {/* Regular Sidebar Navigation Pages */}
         <Route path="*" element={

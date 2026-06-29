@@ -19,7 +19,7 @@ interface Invoice {
 }
 
 export const Invoices: React.FC = () => {
-  const { apiFetch } = useAuth();
+  const { apiFetch, organization } = useAuth();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [activeTab, setActiveTab] = useState('all');
@@ -31,6 +31,11 @@ export const Invoices: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState('stripe');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [isPaying, setIsPaying] = useState(false);
+
+  // Download format modal state
+  const [downloadInvoice, setDownloadInvoice] = useState<Invoice | null>(null);
+  const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'png' | 'doc'>('pdf');
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const fetchInvoices = async () => {
     setIsLoading(true);
@@ -75,6 +80,297 @@ export const Invoices: React.FC = () => {
     } catch (err) {
       console.error('Failed to download PDF:', err);
       alert('Error: Failed to generate and download PDF invoice.');
+    }
+  };
+
+  const handleDownload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!downloadInvoice) return;
+    setIsDownloading(true);
+    try {
+      if (downloadFormat === 'pdf') {
+        await handleDownloadPDF(downloadInvoice.id, downloadInvoice.invoice_number);
+      } else {
+        const data = await apiFetch(`/api/invoices/${downloadInvoice.id}`);
+        if (downloadFormat === 'png') {
+          generatePNG(data, organization);
+        } else if (downloadFormat === 'doc') {
+          generateWordDoc(data, organization);
+        }
+      }
+      setDownloadInvoice(null);
+    } catch (err: any) {
+      alert(`Download failed: ${err.message || err}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const generatePNG = (inv: any, org: any) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 1100;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Clear / background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Header Brand Accent
+    ctx.fillStyle = '#6366f1';
+    ctx.fillRect(40, 40, 15, 15);
+
+    ctx.fillStyle = '#1e1b4b';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('INVOICE', 40, 95);
+
+    ctx.fillStyle = '#4b5563';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`Invoice No: ${inv.invoice_number}`, 40, 120);
+    ctx.fillText(`Date: ${new Date(inv.issue_date).toLocaleDateString()}`, 40, 138);
+    ctx.fillText(`Due Date: ${new Date(inv.due_date).toLocaleDateString()}`, 40, 156);
+
+    // Divider line
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, 185);
+    ctx.lineTo(760, 185);
+    ctx.stroke();
+
+    // Billed From / Billed To
+    ctx.fillStyle = '#1f2937';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('BILLED FROM:', 40, 220);
+    ctx.font = '12px sans-serif';
+    ctx.fillText(org?.name || 'Company LLC', 40, 238);
+    ctx.fillText(org?.address || 'HQ Address', 40, 256);
+
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('BILLED TO:', 450, 220);
+    ctx.font = '12px sans-serif';
+    ctx.fillText(inv.client_name, 450, 238);
+    ctx.fillText(inv.client_company || '', 450, 256);
+    ctx.fillText(inv.client_address || '', 450, 274);
+
+    // Table Header
+    ctx.fillStyle = '#6366f1';
+    ctx.fillRect(40, 320, 720, 28);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('DESCRIPTION', 50, 338);
+    ctx.fillText('QTY', 480, 338);
+    ctx.fillText('UNIT PRICE', 580, 338);
+    ctx.fillText('TOTAL AMOUNT', 680, 338);
+
+    // Table items
+    let y = 375;
+    let subtotal = 0;
+    ctx.fillStyle = '#1f2937';
+    ctx.font = '12px sans-serif';
+    inv.items.forEach((item: any) => {
+      const total = Number(item.quantity) * Number(item.unit_price);
+      subtotal += total;
+      ctx.fillText(item.description, 50, y);
+      ctx.fillText(String(item.quantity), 480, y);
+      ctx.fillText(`${inv.currency} ${Number(item.unit_price).toFixed(2)}`, 580, y);
+      ctx.fillText(`${inv.currency} ${total.toFixed(2)}`, 680, y);
+      
+      ctx.strokeStyle = '#f3f4f6';
+      ctx.beginPath();
+      ctx.moveTo(40, y + 10);
+      ctx.lineTo(760, y + 10);
+      ctx.stroke();
+      y += 35;
+    });
+
+    // Totals
+    const discount = Number(inv.discount || 0);
+    const taxRate = Number(inv.tax_rate || 0);
+    const taxable = Math.max(0, subtotal - discount);
+    const tax = taxable * (taxRate / 100);
+    const grandTotal = taxable + tax;
+
+    ctx.fillStyle = '#4b5563';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Subtotal:', 500, y + 20);
+    ctx.fillText(`${inv.currency} ${subtotal.toFixed(2)}`, 680, y + 20);
+
+    ctx.fillText('Discount:', 500, y + 40);
+    ctx.fillText(`-${inv.currency} ${discount.toFixed(2)}`, 680, y + 40);
+
+    ctx.fillText(`Tax (${taxRate}%):`, 500, y + 60);
+    ctx.fillText(`${inv.currency} ${tax.toFixed(2)}`, 680, y + 60);
+
+    ctx.fillStyle = '#6366f1';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('Total Due:', 500, y + 90);
+    ctx.fillText(`${inv.currency} ${grandTotal.toFixed(2)}`, 680, y + 90);
+
+    // Notes
+    if (inv.notes) {
+      ctx.fillStyle = '#4b5563';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('Notes / Terms & Conditions:', 40, y + 40);
+      ctx.font = '11px sans-serif';
+      ctx.fillText(inv.notes, 40, y + 60);
+    }
+
+    // Trigger download
+    const image = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = image;
+    a.download = `Invoice_${inv.invoice_number}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const generateWordDoc = (inv: any, org: any) => {
+    const orgName = org?.name || 'Company LLC';
+    const orgAddress = org?.address || 'HQ Address';
+    const clientName = inv.client_name;
+    const clientCompany = inv.client_company || '';
+    const clientAddress = inv.client_address || '';
+    const currency = inv.currency || 'USD';
+
+    let itemsHtml = '';
+    inv.items.forEach((item: any) => {
+      const itemTotal = Number(item.quantity) * Number(item.unit_price);
+      itemsHtml += `
+        <tr>
+          <td style="padding: 8px; border: 1px solid #ddd;">${item.description}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${currency} ${Number(item.unit_price).toFixed(2)}</td>
+          <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">${currency} ${itemTotal.toFixed(2)}</td>
+        </tr>
+      `;
+    });
+
+    const subtotal = inv.items.reduce((acc: number, it: any) => acc + (Number(it.quantity) * Number(it.unit_price)), 0);
+    const discount = Number(inv.discount || 0);
+    const taxRate = Number(inv.tax_rate || 0);
+    const taxable = Math.max(0, subtotal - discount);
+    const tax = taxable * (taxRate / 100);
+    const total = taxable + tax;
+
+    const wordHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <title>Invoice ${inv.invoice_number}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
+          h2 { color: #6366f1; margin: 0 0 10px 0; font-size: 22px; }
+          .meta-table { width: 100%; margin-bottom: 25px; border: none; }
+          .meta-table td { padding: 4px; vertical-align: top; font-size: 12px; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+          .items-table th { background-color: #6366f1; color: white; padding: 8px; font-weight: bold; border: 1px solid #ddd; font-size: 12px; text-align: left; }
+          .items-table td { padding: 8px; border: 1px solid #ddd; font-size: 12px; }
+          .totals-table { float: right; width: 240px; border-collapse: collapse; margin-bottom: 20px; }
+          .totals-table td { padding: 6px; font-size: 12px; }
+          .footer-note { font-size: 10px; color: #888; text-align: center; margin-top: 40px; border-top: 1px solid #eee; padding-top: 12px; }
+        </style>
+      </head>
+      <body>
+        <table class="meta-table">
+          <tr>
+            <td>
+              <h2>${orgName.toUpperCase()}</h2>
+              <div>${orgAddress}</div>
+            </td>
+            <td style="text-align: right;">
+              <h2 style="color: #333;">INVOICE</h2>
+              <div><strong>Invoice No:</strong> ${inv.invoice_number}</div>
+              <div><strong>Date:</strong> ${new Date(inv.issue_date).toLocaleDateString()}</div>
+              <div><strong>Due Date:</strong> ${new Date(inv.due_date).toLocaleDateString()}</div>
+            </td>
+          </tr>
+        </table>
+
+        <table class="meta-table">
+          <tr>
+            <td style="width: 50%;">
+              <div style="font-weight: bold; color: #999; margin-bottom: 4px;">BILLED FROM:</div>
+              <strong>${orgName}</strong>
+              <div>${orgAddress}</div>
+            </td>
+            <td style="width: 50%;">
+              <div style="font-weight: bold; color: #999; margin-bottom: 4px;">BILLED TO:</div>
+              <strong>${clientName}</strong>
+              <div>${clientCompany}</div>
+              <div>${clientAddress}</div>
+            </td>
+          </tr>
+        </table>
+
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th style="text-align: center; width: 50px;">Qty</th>
+              <th style="text-align: right; width: 90px;">Unit Price</th>
+              <th style="text-align: right; width: 90px;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+
+        <table class="totals-table">
+          <tr>
+            <td>Subtotal:</td>
+            <td style="text-align: right;">${currency} ${subtotal.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td>Discount:</td>
+            <td style="text-align: right; color: #ef4444;">-${currency} ${discount.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="border-bottom: 1px solid #ddd; padding-bottom: 6px;">Tax (${taxRate}%):</td>
+            <td style="text-align: right; border-bottom: 1px solid #ddd; padding-bottom: 6px;">${currency} ${tax.toFixed(2)}</td>
+          </tr>
+          <tr style="font-weight: bold; color: #6366f1; font-size: 14px;">
+            <td style="padding-top: 8px;">Total Due:</td>
+            <td style="text-align: right; padding-top: 8px;">${currency} ${total.toFixed(2)}</td>
+          </tr>
+        </table>
+        <div style="clear: both;"></div>
+
+        ${inv.notes ? `
+          <div style="margin-top: 25px; font-size: 12px;">
+            <strong style="display: block; margin-bottom: 4px; color: #6366f1;">Notes &amp; Terms:</strong>
+            <div>${inv.notes}</div>
+          </div>
+        ` : ''}
+
+        <div class="footer-note">
+          Generated via BillingFlow. Thank you for your business!
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + wordHtml], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Invoice_${inv.invoice_number}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleUpdateStatus = async (invoiceId: string, newStatus: string) => {
+    try {
+      await apiFetch(`/api/invoices/${invoiceId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus })
+      });
+      fetchInvoices();
+    } catch (err: any) {
+      alert(`Failed to update status: ${err.message || err}`);
     }
   };
 
@@ -256,8 +552,29 @@ export const Invoices: React.FC = () => {
                   </td>
                   <td>{new Date(inv.issue_date).toLocaleDateString()}</td>
                   <td>{new Date(inv.due_date).toLocaleDateString()}</td>
-                  <td>{getStatusBadge(inv.status)}</td>
-                  <td>{(inv.currency || 0).toLocaleString()}</td>
+                  <td>
+                    <select
+                      value={inv.status}
+                      onChange={(e) => handleUpdateStatus(inv.id, e.target.value)}
+                      style={{
+                        background: 'var(--bg-tertiary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: inv.status === 'paid' ? 'var(--success)' : inv.status === 'overdue' ? 'var(--danger)' : inv.status === 'sent' ? 'var(--accent)' : '#d97706',
+                        cursor: 'pointer',
+                        textTransform: 'capitalize'
+                      }}
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="sent">Sent</option>
+                      <option value="paid">Paid</option>
+                      <option value="overdue">Overdue</option>
+                    </select>
+                  </td>
+                  <td>{(inv.currency || '').toUpperCase()} {Number(inv.discount || 0) > 0 ? 'Discounted' : ''}</td>
 
                   <td style={{ textAlign: 'right' }}>
 
@@ -273,33 +590,27 @@ export const Invoices: React.FC = () => {
                       <button
                         className="btn btn-secondary"
                         style={{ padding: '6px 10px' }}
-                        onClick={() => handleDownloadPDF(inv.id, inv.invoice_number)}
-                        title="Download PDF"
+                        onClick={() => setDownloadInvoice(inv)}
+                        title="Download Invoice Format"
                       >
                         <FileDown size={14} />
-
-                        
                       </button>
-                      {inv.status !== 'paid' && (
-                        <>
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '6px 10px', color: 'var(--accent)' }}
-                            onClick={() => handleSendReminder(inv.id)}
-                            title="Send Email Reminder"
-                          >
-                            <Mail size={14} />
-                          </button>
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '6px 10px', color: 'var(--success)' }}
-                            onClick={() => openPaymentModal(inv)}
-                            title="Record Payment"
-                          >
-                            <CheckCircle2 size={14} />
-                          </button>
-                        </>
-                      )}
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 10px', color: 'var(--accent)' }}
+                        onClick={() => handleSendReminder(inv.id)}
+                        title="Send Email Reminder"
+                      >
+                        <Mail size={14} />
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 10px', color: 'var(--success)' }}
+                        onClick={() => openPaymentModal(inv)}
+                        title="Record Payment"
+                      >
+                        <CheckCircle2 size={14} />
+                      </button>
                       <button
                         className="btn btn-danger"
                         style={{ padding: '6px 10px' }}

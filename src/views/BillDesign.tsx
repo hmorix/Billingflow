@@ -1,409 +1,487 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Palette, CheckCircle2, ShieldAlert, Sparkles } from 'lucide-react';
+import {
+  Palette, CheckCircle2, ShieldAlert, Sparkles, Plus,
+  Rocket, FileText, Trash2, Edit2, Clock, Globe, RefreshCw
+} from 'lucide-react';
 
 interface TemplateOption {
   id: string;
   name: string;
   description: string;
   primaryColor: string;
-  textColor: string;
-  backgroundColor: string;
   typography: string;
   badge: string;
+  backgroundColor: string;
 }
 
+interface CustomTemplate {
+  id: string;
+  name: string;
+  status: 'draft' | 'published';
+  config: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const BUILT_IN_TEMPLATES: TemplateOption[] = [
+  {
+    id: 'modern_purple',
+    name: 'Modern Purple',
+    description: 'Clean, modern layout with soft lavender accents and generous white space. Perfect for SaaS and consulting.',
+    primaryColor: '#6366f1',
+    typography: 'Helvetica',
+    badge: 'Default / Clean',
+    backgroundColor: '#ffffff'
+  },
+  {
+    id: 'minimalist_dark',
+    name: 'Minimalist Dark',
+    description: 'High-contrast monochrome with a dark sidebar, structured layout, and modern QR code payment area.',
+    primaryColor: '#1f2937',
+    typography: 'Helvetica Modern',
+    badge: 'High Contrast',
+    backgroundColor: '#f3f4f6'
+  },
+  {
+    id: 'retro_bold',
+    name: 'Retro Bold',
+    description: 'Vintage typewriter style with warm cream background, bold crimson accents and classic Courier grid outlines.',
+    primaryColor: '#dc2626',
+    typography: 'Courier (Monospace)',
+    badge: 'Vintage Grid',
+    backgroundColor: '#faf6f0'
+  },
+  {
+    id: 'corporate_crimson',
+    name: 'Corporate Crimson',
+    description: 'Formal purchase-order layout with solid crimson headers, shipping terms row, and authorized signature area.',
+    primaryColor: '#991b1b',
+    typography: 'Helvetica Formal',
+    badge: 'Corporate PO',
+    backgroundColor: '#ffffff'
+  }
+];
+
+// ─── Mini Invoice Preview ─────────────────────────────────────────────────────
+const MiniInvoicePreview: React.FC<{ tpl: TemplateOption }> = ({ tpl }) => {
+  const isRetro = tpl.id === 'retro_bold';
+
+  return (
+    <div style={{
+      height: '165px', background: tpl.backgroundColor, borderRadius: '6px',
+      border: '1px solid var(--border-color)',
+      boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.04)',
+      padding: '10px', overflow: 'hidden', position: 'relative',
+      fontFamily: isRetro ? 'Courier New, monospace' : 'sans-serif', fontSize: '5px', color: '#1f2937'
+    }}>
+      {tpl.id === 'modern_purple' && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: tpl.primaryColor }} />
+              <span style={{ fontWeight: 'bold', color: tpl.primaryColor }}>ACME CORP</span>
+            </div>
+            <span style={{ fontWeight: 'bold', fontSize: '7px', color: tpl.primaryColor }}>INVOICE</span>
+          </div>
+          <div style={{ height: '0.5px', background: '#e5e7eb', marginBottom: '5px' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <div><div style={{ color: '#9ca3af', fontWeight: 'bold' }}>FROM:</div><div>Acme Corp</div></div>
+            <div style={{ textAlign: 'right' }}><div style={{ color: '#9ca3af', fontWeight: 'bold' }}>TO:</div><div>John Doe</div></div>
+          </div>
+          <div style={{ background: tpl.primaryColor, color: '#fff', padding: '2px 4px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', borderRadius: '2px', marginBottom: '2px' }}>
+            <span>Description</span><span>Total</span>
+          </div>
+          <div style={{ padding: '2px 4px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f3f4f6' }}>
+            <span>Consulting Service</span><span>$1,500</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+            <div style={{ background: tpl.primaryColor, color: '#fff', padding: '2px 7px', borderRadius: '2px', fontWeight: 'bold' }}>Total: $1,500.00</div>
+          </div>
+        </>
+      )}
+      {tpl.id === 'minimalist_dark' && (
+        <div style={{ display: 'flex', height: '100%', margin: '-10px' }}>
+          <div style={{ width: '35%', background: '#1f2937', color: '#9ca3af', padding: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <div style={{ width: '10px', height: '10px', background: '#fff', borderRadius: '2px' }} />
+            <div><div style={{ color: '#d1d5db', fontWeight: 'bold' }}>DATE</div><div>Jun 29, 2026</div></div>
+            <div><div style={{ color: '#d1d5db', fontWeight: 'bold' }}>TO</div><div style={{ color: '#fff' }}>John Doe</div></div>
+          </div>
+          <div style={{ width: '65%', padding: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ fontWeight: 'bold', fontSize: '6px' }}>Acme Corporation</div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold' }}>INVOICE</div>
+            <div style={{ background: '#1f2937', color: '#fff', padding: '2px 4px', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+              <span>Item</span><span>Total</span>
+            </div>
+            <div style={{ padding: '2px 4px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e5e7eb' }}>
+              <span>Consulting</span><span>$1,500</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', fontWeight: 'bold', fontSize: '6px', borderTop: '1px solid #111', paddingTop: '2px', marginTop: '4px' }}>
+              Total: $1,500.00
+            </div>
+          </div>
+        </div>
+      )}
+      {tpl.id === 'retro_bold' && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '3px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 'bold', color: tpl.primaryColor, lineHeight: 1 }}>INVOICE</span>
+            <span style={{ fontWeight: 'bold' }}>ACME &amp; CO.</span>
+          </div>
+          <div style={{ height: '0.5px', background: '#171717', marginBottom: '4px' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #171717' }}>
+            <div style={{ display: 'flex', fontWeight: 'bold', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid #171717' }}>
+              <div style={{ width: '60%', padding: '2px', borderRight: '1px solid #171717' }}>DESCRIPTION</div>
+              <div style={{ width: '40%', padding: '2px', textAlign: 'right' }}>TOTAL</div>
+            </div>
+            <div style={{ display: 'flex', borderBottom: '1px solid #171717' }}>
+              <div style={{ width: '60%', padding: '2px', borderRight: '1px solid #171717' }}>CONSULTING</div>
+              <div style={{ width: '40%', padding: '2px', textAlign: 'right' }}>$1,500.00</div>
+            </div>
+            <div style={{ display: 'flex', fontWeight: 'bold' }}>
+              <div style={{ width: '60%', padding: '2px', borderRight: '1px solid #171717', textAlign: 'right', color: tpl.primaryColor }}>GRAND TOTAL</div>
+              <div style={{ width: '40%', padding: '2px', textAlign: 'right', color: tpl.primaryColor }}>$1,500.00</div>
+            </div>
+          </div>
+        </>
+      )}
+      {tpl.id === 'corporate_crimson' && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <span style={{ fontWeight: 'bold', color: tpl.primaryColor, fontSize: '5.5px' }}>ACME STATIONERY</span>
+            <span style={{ fontSize: '4.5px', color: tpl.primaryColor }}>Dec 18, 2026</span>
+          </div>
+          <div style={{ background: tpl.primaryColor, color: '#fff', padding: '2px 5px', fontWeight: 'bold', fontSize: '5.5px', marginBottom: '3px' }}>
+            PURCHASE ORDER #1258820
+          </div>
+          <div style={{ display: 'flex', background: '#f3f4f6', padding: '2px', marginBottom: '3px', justifyContent: 'space-between' }}>
+            <span>VIA: DHL</span><span>NET 30</span>
+          </div>
+          <div>
+            <div style={{ background: tpl.primaryColor, color: '#fff', padding: '2px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+              <span>DESCRIPTION</span><span>TOTAL</span>
+            </div>
+            <div style={{ padding: '2px', display: 'flex', justifyContent: 'space-between', background: '#f9fafb' }}>
+              <span>Item from Stock</span><span>$1,500.00</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontWeight: 'bold', color: tpl.primaryColor, fontSize: '5.5px' }}>THANK YOU</span>
+            <div style={{ borderTop: '0.5px solid #991b1b', width: '50px', textAlign: 'center', fontSize: '3.5px', paddingTop: '1px' }}>AUTH SIGNATURE</div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ─── Status Badge ─────────────────────────────────────────────────────────────
+const StatusBadge: React.FC<{ status: 'draft' | 'published' }> = ({ status }) => (
+  <span style={{
+    display: 'inline-flex', alignItems: 'center', gap: '4px',
+    background: status === 'published' ? 'rgba(16,185,129,0.1)' : 'rgba(251,191,36,0.1)',
+    color: status === 'published' ? 'var(--success)' : '#d97706',
+    fontSize: '0.62rem', fontWeight: 700, padding: '2px 8px',
+    borderRadius: '8px', textTransform: 'uppercase', letterSpacing: '0.3px'
+  }}>
+    {status === 'published' ? <Globe size={9} /> : <Clock size={9} />}
+    &nbsp;{status}
+  </span>
+);
+
+// ─── Main BillDesign Page ─────────────────────────────────────────────────────
 export const BillDesign: React.FC = () => {
   const { apiFetch, organization, updateOrganization } = useAuth();
-  const [activeTemplate, setActiveTemplate] = useState<string>(
-    organization?.invoiceTemplate || 'modern_purple'
-  );
-  const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const [activeTemplate, setActiveTemplate] = useState<string>(organization?.invoiceTemplate || 'modern_purple');
+  const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isFetching, setIsFetching] = useState(true);
 
-  const templates: TemplateOption[] = [
-    {
-      id: 'modern_purple',
-      name: 'Modern Purple',
-      description: 'Clean modern layout featuring soft lavender accents, generous white space, and Indigo highlights. Perfect for modern SaaS and consulting.',
-      primaryColor: '#6366f1',
-      textColor: '#1f2937',
-      backgroundColor: '#ffffff',
-      typography: 'Helvetica',
-      badge: 'Default / Clean'
-    },
-    {
-      id: 'minimalist_dark',
-      name: 'Minimalist Dark',
-      description: 'High-contrast monochrome design featuring a dark sidebar column, structured layout, and a modern payment QR code area.',
-      primaryColor: '#1f2937',
-      textColor: '#1f2937',
-      backgroundColor: '#f3f4f6',
-      typography: 'Helvetica Modern',
-      badge: 'High Contrast'
-    },
-    {
-      id: 'retro_bold',
-      name: 'Retro Bold',
-      description: 'A vintage-style typewriter design featuring a warm cream background, bold crimson red accents, and classic Courier grid outlines.',
-      primaryColor: '#dc2626',
-      textColor: '#171717',
-      backgroundColor: '#faf6f0',
-      typography: 'Courier (Monospace)',
-      badge: 'Vintage Grid'
-    },
-    {
-      id: 'corporate_crimson',
-      name: 'Corporate Crimson',
-      description: 'Formal purchase-order style design featuring solid crimson headers, a dedicated shipping/payment terms row, and an authorized signature area.',
-      primaryColor: '#991b1b',
-      textColor: '#111827',
-      backgroundColor: '#ffffff',
-      typography: 'Helvetica Formal',
-      badge: 'Corporate PO'
-    }
-  ];
-
-  const handleActivateTemplate = async (templateId: string) => {
-    setLoadingTemplateId(templateId);
-    setSuccessMessage(null);
-    setError(null);
-
+  const fetchCustomTemplates = useCallback(async () => {
+    setIsFetching(true);
     try {
-      const response = await apiFetch('/api/organization/template', {
+      const data = await apiFetch('/api/organization/templates');
+      setCustomTemplates(Array.isArray(data) ? data : []);
+    } catch {
+      setCustomTemplates([]);
+    } finally {
+      setIsFetching(false);
+    }
+  }, [apiFetch]);
+
+  useEffect(() => { fetchCustomTemplates(); }, [fetchCustomTemplates]);
+
+  const showSuccess = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(null), 4000);
+  };
+
+  const handleActivate = async (templateId: string, name: string) => {
+    setLoadingId(templateId);
+    setError(null);
+    try {
+      await apiFetch('/api/organization/template', {
         method: 'PUT',
         body: JSON.stringify({ template: templateId })
       });
-
       updateOrganization({ invoiceTemplate: templateId });
       setActiveTemplate(templateId);
-      setSuccessMessage(`${templates.find(t => t.id === templateId)?.name} template has been activated successfully!`);
+      showSuccess(`"${name}" is now your active invoice design!`);
     } catch (err: any) {
-      setError(err.message || 'Failed to update invoice template.');
+      setError(err.message || 'Failed to activate template.');
     } finally {
-      setLoadingTemplateId(null);
+      setLoadingId(null);
+    }
+  };
+
+  const handleToggleStatus = async (tpl: CustomTemplate) => {
+    const newStatus = tpl.status === 'draft' ? 'published' : 'draft';
+    setLoadingId(tpl.id + '_status');
+    try {
+      await apiFetch(`/api/organization/templates/${tpl.id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus })
+      });
+      setCustomTemplates(prev => prev.map(t => t.id === tpl.id ? { ...t, status: newStatus } : t));
+      showSuccess(`"${tpl.name}" set to ${newStatus}.`);
+    } catch (err: any) {
+      setError(err.message || 'Status update failed.');
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const handleDelete = async (tpl: CustomTemplate) => {
+    if (!window.confirm(`Delete template "${tpl.name}"? This cannot be undone.`)) return;
+    setDeletingId(tpl.id);
+    try {
+      await apiFetch(`/api/organization/templates/${tpl.id}`, { method: 'DELETE' });
+      setCustomTemplates(prev => prev.filter(t => t.id !== tpl.id));
+      if (activeTemplate === tpl.id) {
+        setActiveTemplate('modern_purple');
+        updateOrganization({ invoiceTemplate: 'modern_purple' });
+      }
+      showSuccess(`"${tpl.name}" was deleted.`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete template.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
   return (
-    <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '1200px', margin: '0 auto' }}>
-      
-      {/* Title */}
+    <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '40px', maxWidth: '1200px', margin: '0 auto' }}>
+
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 700 }} className="text-gradient">
-            Invoice Bill Design
-          </h2>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 700 }} className="text-gradient">Invoice Bill Design</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '4px' }}>
-            Choose the visual layout and color palette for all generated PDF invoices.
+            Choose or build a visual layout for all generated PDF invoices.
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'rgba(99, 102, 241, 0.1)', borderRadius: '20px', color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 600 }}>
-          <Palette size={16} />
-          <span>Multi-Template Active</span>
-        </div>
+        <button
+          onClick={() => navigate('/settings/design/builder')}
+          className="btn btn-primary"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px' }}
+        >
+          <Plus size={16} />
+          <span>Create Custom Template</span>
+        </button>
       </div>
 
       {/* Alerts */}
       {error && (
-        <div className="fade-in" style={{ background: 'rgba(225, 29, 72, 0.08)', border: '1px solid rgba(225, 29, 72, 0.15)', color: 'var(--danger)', padding: '16px', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <ShieldAlert size={20} />
-          <span>{error}</span>
+        <div className="fade-in" style={{ background: 'rgba(225,29,72,0.08)', border: '1px solid rgba(225,29,72,0.2)', color: 'var(--danger)', padding: '14px 18px', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <ShieldAlert size={18} /><span>{error}</span>
         </div>
       )}
-
       {successMessage && (
-        <div className="fade-in" style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.15)', color: 'var(--success)', padding: '16px', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <CheckCircle2 size={20} />
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {successMessage} <Sparkles size={16} className="animate-pulse" />
-          </span>
+        <div className="fade-in" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: 'var(--success)', padding: '14px 18px', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <CheckCircle2 size={18} />
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>{successMessage} <Sparkles size={14} /></span>
         </div>
       )}
 
-      {/* Template Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '28px' }}>
-        {templates.map((tpl) => {
-          const isActive = activeTemplate === tpl.id;
-          const isLoading = loadingTemplateId === tpl.id;
-
-          return (
-            <div 
-              key={tpl.id} 
-              className={`glass-card ${isActive ? 'active-border' : ''}`}
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '20px', 
-                padding: '24px',
-                border: isActive ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                transform: isActive ? 'scale(1.02)' : 'none',
-                transition: 'all 0.3s ease',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-            >
-              {/* Active Banner Badge */}
-              {isActive && (
-                <div style={{
-                  position: 'absolute',
-                  top: '12px',
-                  right: '12px',
-                  background: 'var(--primary)',
-                  color: '#fff',
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <CheckCircle2 size={12} />
-                  <span>ACTIVE DESIGN</span>
-                </div>
-              )}
-
-              {/* Template Header info */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: isActive ? '12px' : '0' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  {tpl.badge}
-                </span>
-                <h4 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {tpl.name}
-                </h4>
-              </div>
-
-              {/* HTML/CSS Miniature High-Fidelity Mockup */}
-              <div style={{ 
-                height: '180px', 
-                background: tpl.backgroundColor, 
-                borderRadius: '8px', 
-                border: '1px solid var(--border-color)',
-                boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                fontSize: '5px',
-                color: tpl.textColor,
-                fontFamily: tpl.id === 'retro_bold' ? 'Courier New, monospace' : 'sans-serif',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                
-                {/* 1. MODERN PURPLE MINI LAYOUT */}
-                {tpl.id === 'modern_purple' && (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: tpl.primaryColor }} />
-                        <span style={{ fontWeight: 'bold', fontSize: '6px' }}>Acme Corp</span>
-                      </div>
-                      <span style={{ fontWeight: 'bold', fontSize: '8px', color: tpl.primaryColor }}>INVOICE</span>
-                    </div>
-                    <div style={{ height: '1px', background: '#e5e7eb', margin: '4px 0' }} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ fontWeight: 'bold', color: '#9ca3af' }}>FROM:</div>
-                        <div>Acme Corp LLC</div>
-                        <div>HQ New York</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 'bold', color: '#9ca3af' }}>TO:</div>
-                        <div>John Doe</div>
-                        <div>Invoice No: INV-0001</div>
-                      </div>
-                    </div>
-                    {/* Tiny Table */}
-                    <div style={{ marginTop: '8px' }}>
-                      <div style={{ background: tpl.primaryColor, color: '#fff', padding: '2px 4px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', borderRadius: '2px' }}>
-                        <span>Description</span>
-                        <span>Total</span>
-                      </div>
-                      <div style={{ padding: '2px 4px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f3f4f6' }}>
-                        <span>Consulting Service</span>
-                        <span>$1,500.00</span>
-                      </div>
-                    </div>
-                    {/* Total Box */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-                      <div style={{ background: tpl.primaryColor, color: '#fff', padding: '3px 8px', borderRadius: '2px', fontWeight: 'bold', fontSize: '6px' }}>
-                        Total Due: $1,500.00
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* 2. MINIMALIST DARK MINI LAYOUT */}
-                {tpl.id === 'minimalist_dark' && (
-                  <div style={{ display: 'flex', height: '100%', margin: '-12px' }}>
-                    {/* Sidebar */}
-                    <div style={{ width: '35%', background: '#1f2937', color: '#9ca3af', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#fff' }} />
-                      <div>
-                        <div style={{ color: '#d1d5db', fontWeight: 'bold' }}>DATE</div>
-                        <div style={{ fontSize: '4.5px' }}>June 29, 2026</div>
-                      </div>
-                      <div>
-                        <div style={{ color: '#d1d5db', fontWeight: 'bold' }}>TO</div>
-                        <div style={{ fontSize: '4.5px', color: '#fff' }}>John Doe</div>
-                      </div>
-                      {/* Tiny QR code */}
-                      <div style={{ width: '14px', height: '14px', border: '1px solid #4b5563', marginTop: 'auto', display: 'flex', flexWrap: 'wrap', padding: '1px' }}>
-                        <div style={{ width: '4px', height: '4px', background: '#fff' }} />
-                        <div style={{ width: '4px', height: '4px' }} />
-                        <div style={{ width: '4px', height: '4px', background: '#fff' }} />
-                        <div style={{ width: '4px', height: '4px', background: '#fff' }} />
-                      </div>
-                    </div>
-                    {/* Main Side */}
-                    <div style={{ width: '65%', padding: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '6px' }}>Acme Corporation</div>
-                        <div style={{ fontSize: '10px', fontWeight: 'bold', marginTop: '4px' }}>INVOICE</div>
-                      </div>
-                      {/* Table */}
-                      <div style={{ width: '100%' }}>
-                        <div style={{ background: '#1f2937', color: '#fff', padding: '2px 4px', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Description</span>
-                          <span>Total</span>
-                        </div>
-                        <div style={{ padding: '2px 4px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e5e7eb' }}>
-                          <span>Consulting</span>
-                          <span>$1,500.00</span>
-                        </div>
-                      </div>
-                      {/* Total */}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', fontWeight: 'bold', fontSize: '6.5px', borderTop: '1px solid #111827', paddingTop: '2px' }}>
-                        Total: $1,500.00
-                      </div>
-                    </div>
+      {/* ─── Built-in Templates Grid ─── */}
+      <section>
+        <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>
+          Built-in Templates
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(265px, 1fr))', gap: '24px' }}>
+          {BUILT_IN_TEMPLATES.map((tpl) => {
+            const isActive = activeTemplate === tpl.id;
+            const isActivating = loadingId === tpl.id;
+            return (
+              <div
+                key={tpl.id}
+                className="glass-card"
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: '16px', padding: '22px',
+                  border: isActive ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                  transform: isActive ? 'scale(1.02)' : 'none',
+                  transition: 'all 0.3s ease', position: 'relative', overflow: 'hidden'
+                }}
+              >
+                {isActive && (
+                  <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'var(--primary)', color: '#fff', fontSize: '0.62rem', fontWeight: 700, padding: '3px 9px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                    <CheckCircle2 size={10} /> ACTIVE
                   </div>
                 )}
-
-                {/* 3. RETRO BOLD MINI LAYOUT */}
-                {tpl.id === 'retro_bold' && (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: tpl.primaryColor, lineHeight: 1 }}>INVOICE</div>
-                        <div style={{ fontSize: '4.5px', marginTop: '3px' }}>#INV-0001</div>
-                      </div>
-                      <div style={{ textAlign: 'right', fontWeight: 'bold' }}>ACME &amp; CO.</div>
-                    </div>
-                    <div style={{ height: '1px', background: '#171717', margin: '3px 0' }} />
-                    {/* Boxed Grid Table */}
-                    <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #171717', marginTop: '4px' }}>
-                      <div style={{ display: 'flex', borderBottom: '1px solid #171717', fontWeight: 'bold', background: 'rgba(0,0,0,0.02)' }}>
-                        <div style={{ width: '65%', padding: '2px', borderRight: '1px solid #171717' }}>DESCRIPTION</div>
-                        <div style={{ width: '35%', padding: '2px', textAlign: 'right' }}>TOTAL</div>
-                      </div>
-                      <div style={{ display: 'flex', borderBottom: '1px solid #171717' }}>
-                        <div style={{ width: '65%', padding: '2px', borderRight: '1px solid #171717' }}>CONSULTING SERVICE</div>
-                        <div style={{ width: '35%', padding: '2px', textAlign: 'right' }}>1,500.00</div>
-                      </div>
-                      <div style={{ display: 'flex', fontWeight: 'bold' }}>
-                        <div style={{ width: '65%', padding: '2px', borderRight: '1px solid #171717', textAlign: 'right', color: tpl.primaryColor }}>GRAND TOTAL</div>
-                        <div style={{ width: '35%', padding: '2px', textAlign: 'right', color: tpl.primaryColor }}>$1,500.00</div>
-                      </div>
-                    </div>
-                    {/* Sign Line */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '10px' }}>
-                      <div>
-                        <div style={{ fontWeight: 'bold' }}>TERM:</div>
-                        <div>30 DAYS NET</div>
-                      </div>
-                      <div style={{ textAlign: 'center', width: '60px' }}>
-                        <div style={{ fontFamily: 'Times New Roman, serif', fontStyle: 'italic', color: tpl.primaryColor, fontSize: '6px' }}>Acme &amp; Co.</div>
-                        <div style={{ height: '0.5px', background: '#171717', margin: '1px 0' }} />
-                        <div style={{ fontSize: '4px', fontWeight: 'bold' }}>MANAGER</div>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* 4. CORPORATE CRIMSON MINI LAYOUT */}
-                {tpl.id === 'corporate_crimson' && (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        <div style={{ width: '10px', height: '10px', background: tpl.primaryColor }} />
-                        <span style={{ fontWeight: 'bold', color: tpl.primaryColor, fontSize: '6px' }}>ACME STATIONERY</span>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '5px', fontWeight: 'bold', color: tpl.primaryColor }}>December 18, 2021</div>
-                        <div style={{ fontSize: '4px' }}>Purchase Order Date</div>
-                      </div>
-                    </div>
-                    {/* Crimson Header Bar */}
-                    <div style={{ background: tpl.primaryColor, color: '#fff', padding: '3px 6px', fontWeight: 'bold', fontSize: '6px', marginTop: '4px' }}>
-                      PURCHASE ORDER  #1258820
-                    </div>
-                    {/* Shipping Row */}
-                    <div style={{ display: 'flex', background: '#f3f4f6', padding: '2px', fontSize: '4.5px', marginTop: '4px', justifyContent: 'space-between' }}>
-                      <div><strong>VIA:</strong> DHL</div>
-                      <div><strong>PAYMENT:</strong> NET 30</div>
-                      <div><strong>DELIVERY:</strong> 2021-12-31</div>
-                    </div>
-                    {/* Table */}
-                    <div style={{ marginTop: '4px' }}>
-                      <div style={{ background: tpl.primaryColor, color: '#fff', padding: '2px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                        <span>DESCRIPTION</span>
-                        <span>TOTAL</span>
-                      </div>
-                      <div style={{ padding: '2px', display: 'flex', justifyContent: 'space-between', background: '#f9fafb' }}>
-                        <span>Item from stock</span>
-                        <span>$1,500.00</span>
-                      </div>
-                    </div>
-                    {/* Bottom thank you / sig */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                      <span style={{ fontWeight: 'bold', color: tpl.primaryColor }}>THANK YOU</span>
-                      <div style={{ borderTop: '0.5px solid #991b1b', width: '50px', textAlign: 'center', fontSize: '4px', paddingTop: '1px' }}>
-                        AUTH SIGNATURE
-                      </div>
-                    </div>
-                  </>
-                )}
-
-              </div>
-
-              {/* Description */}
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4, flexGrow: 1 }}>
-                {tpl.description}
-              </p>
-
-              {/* Details footer */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                borderTop: '1px solid var(--border-color)', 
-                paddingTop: '16px',
-                fontSize: '0.8rem'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: tpl.primaryColor }} />
-                  <span style={{ color: 'var(--text-secondary)' }}>{tpl.typography}</span>
+                <div style={{ marginTop: isActive ? '10px' : 0 }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{tpl.badge}</span>
+                  <h4 style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>{tpl.name}</h4>
                 </div>
-
-                <button
-                  type="button"
-                  disabled={isActive || isLoading}
-                  onClick={() => handleActivateTemplate(tpl.id)}
-                  className={`btn ${isActive ? 'btn-secondary' : 'btn-primary'}`}
-                  style={{ padding: '6px 14px', fontSize: '0.78rem' }}
-                >
-                  {isLoading ? 'Activating...' : isActive ? 'Active ✓' : 'Activate Template'}
-                </button>
+                <MiniInvoicePreview tpl={tpl} />
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5, flexGrow: 1 }}>{tpl.description}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: tpl.primaryColor }} />
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{tpl.typography}</span>
+                  </div>
+                  <button
+                    disabled={isActive || !!isActivating}
+                    onClick={() => handleActivate(tpl.id, tpl.name)}
+                    className={`btn ${isActive ? 'btn-secondary' : 'btn-primary'}`}
+                    style={{ padding: '5px 13px', fontSize: '0.75rem' }}
+                  >
+                    {isActivating ? 'Activating…' : isActive ? '✓ Active' : 'Activate'}
+                  </button>
+                </div>
               </div>
+            );
+          })}
+        </div>
+      </section>
 
+      {/* ─── Custom Templates Panel ─── */}
+      <section>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            My Custom Templates
+          </h3>
+          <button
+            onClick={fetchCustomTemplates}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', padding: '4px 8px' }}
+          >
+            <RefreshCw size={12} /><span>Refresh</span>
+          </button>
+        </div>
+
+        {isFetching ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
+            <div style={{ width: '28px', height: '28px', border: '3px solid rgba(99,102,241,0.15)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          </div>
+        ) : customTemplates.length === 0 ? (
+          <div style={{ background: 'var(--bg-secondary)', border: '2px dashed var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '60px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', textAlign: 'center' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'rgba(99,102,241,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Palette size={28} color="var(--primary)" />
             </div>
-          );
-        })}
-      </div>
+            <div>
+              <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>No Custom Templates Yet</h4>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '6px' }}>
+                Design your own branded invoice layout with the visual builder.
+              </p>
+            </div>
+            <button onClick={() => navigate('/settings/design/builder')} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+              <Plus size={16} /><span>Create First Template</span>
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {customTemplates.map((tpl) => {
+              const isActive = activeTemplate === tpl.id;
+              const isDeleting = deletingId === tpl.id;
+              const isActivating = loadingId === tpl.id;
+              const isTogglingStatus = loadingId === tpl.id + '_status';
+              const cfg = (() => { try { return JSON.parse(tpl.config); } catch { return {}; } })();
+
+              return (
+                <div
+                  key={tpl.id}
+                  className="glass-card"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '18px', padding: '16px 22px',
+                    border: isActive ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                    transition: 'all 0.25s ease'
+                  }}
+                >
+                  {/* Color chip */}
+                  <div style={{
+                    width: '46px', height: '46px', borderRadius: '10px', flexShrink: 0,
+                    background: cfg.primaryColor || '#6366f1',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `0 4px 14px ${cfg.primaryColor || '#6366f1'}55`
+                  }}>
+                    <FileText size={19} color="#fff" />
+                  </div>
+
+                  {/* Meta */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '3px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tpl.name}</span>
+                      {isActive && <span style={{ background: 'var(--primary)', color: '#fff', fontSize: '0.6rem', fontWeight: 700, padding: '2px 7px', borderRadius: '8px', flexShrink: 0 }}>ACTIVE</span>}
+                      <StatusBadge status={tpl.status} />
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', gap: '12px' }}>
+                      <span>Font: {cfg.fontFamily || 'Helvetica'}</span>
+                      <span>Updated: {new Date(tpl.updated_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+                    <button
+                      onClick={() => handleToggleStatus(tpl)}
+                      disabled={!!isTogglingStatus}
+                      title={tpl.status === 'draft' ? 'Publish template' : 'Move to draft'}
+                      className="btn btn-secondary"
+                      style={{ padding: '5px 11px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      {tpl.status === 'draft' ? <Rocket size={12} /> : <Clock size={12} />}
+                      {isTogglingStatus ? '…' : tpl.status === 'draft' ? 'Publish' : 'Draft'}
+                    </button>
+
+                    <button
+                      onClick={() => navigate(`/settings/design/builder/${tpl.id}`)}
+                      title="Edit in builder"
+                      className="btn btn-secondary"
+                      style={{ padding: '6px 10px' }}
+                    >
+                      <Edit2 size={14} />
+                    </button>
+
+                    <button
+                      disabled={isActive || !!isActivating}
+                      onClick={() => handleActivate(tpl.id, tpl.name)}
+                      className={`btn ${isActive ? 'btn-secondary' : 'btn-primary'}`}
+                      style={{ padding: '5px 13px', fontSize: '0.75rem' }}
+                    >
+                      {isActivating ? '…' : isActive ? '✓ Active' : 'Activate'}
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(tpl)}
+                      disabled={!!isDeleting}
+                      title="Delete template"
+                      className="btn btn-danger"
+                      style={{ padding: '6px 10px' }}
+                    >
+                      {isDeleting ? '…' : <Trash2 size={14} />}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
     </div>
   );
