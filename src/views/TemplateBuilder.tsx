@@ -748,7 +748,7 @@ export const TemplateBuilder: React.FC = () => {
 
                   case 'billing':
                     return (
-                      <div key={block.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', lineGap: '1.5' }}>
+                      <div key={block.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', lineHeight: '1.5' }}>
                         <div>
                           <strong style={{ color: 'var(--text-muted)', fontSize: '0.6rem', display: 'block', marginBottom: '2px' }}>BILLED FROM:</strong>
                           <strong>Acme Corporation LLC</strong>
